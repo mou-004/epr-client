@@ -1,26 +1,227 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import { Download, Printer } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Card, CardHeader } from "../components/ui/Card";
+import { Input } from "../components/ui/Input";
+import { Spinner } from "../components/ui/Spinner";
+import { Table, Td, Th } from "../components/ui/Table";
+import { api } from "../lib/api";
+import { formatCurrency, formatDate } from "../lib/utils";
+
+type ReportType = "products" | "customers" | "suppliers" | "purchases" | "sales";
+
+type ReportResponse = {
+  title: string;
+  total?: number;
+  paid?: number;
+  due?: number;
+  data: any[];
+};
+
+const reportTypes: Array<{ key: ReportType; label: string }> = [
+  { key: "products", label: "Product Report" },
+  { key: "customers", label: "Customer Report" },
+  { key: "suppliers", label: "Supplier Report" },
+  { key: "purchases", label: "Purchase Report" },
+  { key: "sales", label: "Sales Report" }
+];
 
 export default function Reports() {
-  const [data, setData] = useState<any>(null);
+  const [type, setType] = useState<ReportType>("products");
+  const [report, setReport] = useState<ReportResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+
+    const query =
+      type === "purchases" || type === "sales"
+        ? `?start=${start}&end=${end}`
+        : "";
+
+    const data = await api.get<ReportResponse>(`/reports/${type}${query}`);
+    setReport(data);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    axios.get("http://localhost:5000/api/stats")
-      .then((res) => {
-        setData(res.data);
-      });
-  }, []);
+    load();
+  }, [type]);
+
+  const exportCsv = () => {
+    if (!report) return;
+
+    const rows = report.data.map((item) => JSON.stringify(item));
+    const blob = new Blob([rows.join("\n")], {
+      type: "text/plain;charset=utf-8"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = `${type}-report.jsonl`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  const renderRows = () => {
+    if (!report) return null;
+
+    if (type === "products") {
+      return report.data.map((p) => (
+        <tr key={p._id}>
+          <Td className="font-bold text-slate-950">{p.name}</Td>
+          <Td>{p.sku}</Td>
+          <Td>{p.category}</Td>
+          <Td>
+            {p.stock} {p.unit}
+          </Td>
+          <Td>{formatCurrency(p.salePrice)}</Td>
+        </tr>
+      ));
+    }
+
+    if (type === "customers" || type === "suppliers") {
+      return report.data.map((c) => (
+        <tr key={c._id}>
+          <Td className="font-bold text-slate-950">{c.name}</Td>
+          <Td>{c.company || "—"}</Td>
+          <Td>{c.email || "—"}</Td>
+          <Td>{c.phone || "—"}</Td>
+          <Td>{c.address || "—"}</Td>
+        </tr>
+      ));
+    }
+
+    if (type === "purchases") {
+      return report.data.map((p) => (
+        <tr key={p._id}>
+          <Td className="font-bold text-slate-950">
+            {p.referenceNo || "—"}
+          </Td>
+          <Td>{p.supplier?.name || "—"}</Td>
+          <Td>{formatDate(p.purchaseDate)}</Td>
+          <Td>{p.items?.length || 0}</Td>
+          <Td>{formatCurrency(p.totalAmount)}</Td>
+        </tr>
+      ));
+    }
+
+    return report.data.map((s) => (
+      <tr key={s._id}>
+        <Td className="font-bold text-slate-950">{s.invoiceNo}</Td>
+        <Td>{s.customer?.name || "—"}</Td>
+        <Td>{formatDate(s.saleDate)}</Td>
+        <Td>{s.paymentStatus}</Td>
+        <Td>{formatCurrency(s.totalAmount)}</Td>
+      </tr>
+    ));
+  };
+
+  const headers =
+    type === "products"
+      ? ["Name", "SKU", "Category", "Stock", "Sale Price"]
+      : type === "customers" || type === "suppliers"
+      ? ["Name", "Company", "Email", "Phone", "Address"]
+      : type === "purchases"
+      ? ["Reference", "Supplier", "Date", "Items", "Total"]
+      : ["Invoice", "Customer", "Date", "Status", "Total"];
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Reports Center</h1>
+    <div className="grid gap-6 p-3 md:p-6">
+      {/* TOP CONTROLS */}
+      <Card className="no-print">
+        <CardHeader
+          title="Reports"
+          description="Generate product, customer, supplier, purchase and sales reports"
+        />
 
-      <p>Products: {data?.products || 0}</p>
-      <p>Customers: {data?.customers || 0}</p>
-      <p>Suppliers: {data?.suppliers || 0}</p>
-      <p>Purchases: {data?.purchases || 0}</p>
-      <p>Sales: {data?.sales || 0}</p>
-      <p>Revenue: {data?.revenue || 0}</p>
+        <div className="flex flex-wrap gap-2">
+          {reportTypes.map((item) => (
+            <Button
+              key={item.key}
+              variant={type === item.key ? "primary" : "secondary"}
+              onClick={() => setType(item.key)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+
+        {(type === "purchases" || type === "sales") && (
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input
+              label="Start Date"
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+            <Input
+              label="End Date"
+              type="date"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+            <Button className="w-full md:w-auto self-end" onClick={load}>
+              Apply Filter
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {/* REPORT TABLE */}
+      <Card>
+        <CardHeader
+          title={report?.title || "Report"}
+          description={
+            report?.total !== undefined
+              ? `Total: ${formatCurrency(report.total)}${
+                  report.paid !== undefined
+                    ? ` • Paid: ${formatCurrency(
+                        report.paid
+                      )} • Due: ${formatCurrency(report.due || 0)}`
+                    : ""
+                }`
+              : `${report?.data.length || 0} records`
+          }
+          action={
+            <div className="flex flex-wrap gap-2 no-print">
+              <Button variant="secondary" onClick={exportCsv}>
+                <Download size={16} /> Export
+              </Button>
+              <Button onClick={() => window.print()}>
+                <Printer size={16} /> Print
+              </Button>
+            </div>
+          }
+        />
+
+        {loading || !report ? (
+          <div className="grid min-h-64 place-items-center">
+            <Spinner />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <thead>
+                <tr>
+                  {headers.map((h) => (
+                    <Th key={h}>{h}</Th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {renderRows()}
+              </tbody>
+            </Table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
