@@ -1,102 +1,55 @@
 import { useEffect, useState } from "react";
-import { Download, Printer } from "lucide-react";
-import { Button } from "../components/ui/Button";
-import { Card, CardHeader } from "../components/ui/Card";
-import { Input } from "../components/ui/Input";
-import { Spinner } from "../components/ui/Spinner";
-import { Table, Td, Th } from "../components/ui/Table";
-import { api } from "../lib/api";
-import { formatCurrency, formatDate } from "../lib/utils";
-
-type ReportType = "products" | "customers" | "suppliers" | "purchases" | "sales";
-
-type ReportResponse = {
-  title: string;
-  total?: number;
-  paid?: number;
-  due?: number;
-  data: any[];
-};
-
-const reportTypes: Array<{ key: ReportType; label: string }> = [
-  { key: "products", label: "Product Report" },
-  { key: "customers", label: "Customer Report" },
-  { key: "suppliers", label: "Supplier Report" },
-  { key: "purchases", label: "Purchase Report" },
-  { key: "sales", label: "Sales Report" }
-];
+import axios from "axios";
 
 export default function Reports() {
-  const [type, setType] = useState<ReportType>("products");
-  const [report, setReport] = useState<ReportResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [data, setData] = useState<any>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const query = (type === "purchases" || type === "sales") ? `?start=${start}&end=${end}` : "";
-    const data = await api.get<ReportResponse>(`/reports/${type}${query}`);
-    setReport(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [type]);
-
-  const exportCsv = () => {
-    if (!report) return;
-    const rows = report.data.map((item) => JSON.stringify(item));
-    const blob = new Blob([rows.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${type}-report.jsonl`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const renderRows = () => {
-    if (!report) return null;
-    if (type === "products") return report.data.map((p) => <tr key={p._id}><Td className="font-bold text-slate-950">{p.name}</Td><Td>{p.sku}</Td><Td>{p.category}</Td><Td>{p.stock} {p.unit}</Td><Td>{formatCurrency(p.salePrice)}</Td></tr>);
-    if (type === "customers" || type === "suppliers") return report.data.map((c) => <tr key={c._id}><Td className="font-bold text-slate-950">{c.name}</Td><Td>{c.company || "—"}</Td><Td>{c.email || "—"}</Td><Td>{c.phone || "—"}</Td><Td>{c.address || "—"}</Td></tr>);
-    if (type === "purchases") return report.data.map((p) => <tr key={p._id}><Td className="font-bold text-slate-950">{p.referenceNo || "—"}</Td><Td>{p.supplier?.name || "—"}</Td><Td>{formatDate(p.purchaseDate)}</Td><Td>{p.items?.length || 0}</Td><Td>{formatCurrency(p.totalAmount)}</Td></tr>);
-    return report.data.map((s) => <tr key={s._id}><Td className="font-bold text-slate-950">{s.invoiceNo}</Td><Td>{s.customer?.name || "—"}</Td><Td>{formatDate(s.saleDate)}</Td><Td>{s.paymentStatus}</Td><Td>{formatCurrency(s.totalAmount)}</Td></tr>);
-  };
-
-  const headers = type === "products" ? ["Name", "SKU", "Category", "Stock", "Sale Price"] :
-    type === "customers" || type === "suppliers" ? ["Name", "Company", "Email", "Phone", "Address"] :
-    type === "purchases" ? ["Reference", "Supplier", "Date", "Items", "Total"] :
-    ["Invoice", "Customer", "Date", "Status", "Total"];
+  useEffect(() => {
+    axios.get("http://localhost:5000/api/stats").then((res) => {
+      setData(res.data);
+    });
+  }, []);
 
   return (
-    <div className="grid gap-6">
-      <Card className="no-print">
-        <CardHeader title="Reports" description="Generate product, customer, supplier, purchase and sales reports" />
-        <div className="flex flex-wrap gap-2">
-          {reportTypes.map((item) => <Button key={item.key} variant={type === item.key ? "primary" : "secondary"} onClick={() => setType(item.key)}>{item.label}</Button>)}
-        </div>
-        {(type === "purchases" || type === "sales") && (
-          <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
-            <Input label="Start Date" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-            <Input label="End Date" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-            <Button className="self-end" onClick={load}>Apply Filter</Button>
-          </div>
-        )}
-      </Card>
+    <div className="p-4 md:p-8">
+      <h1 className="text-2xl font-bold mb-6">📊 Reports Center</h1>
 
-      <Card>
-        <CardHeader
-          title={report?.title || "Report"}
-          description={report?.total !== undefined ? `Total: ${formatCurrency(report.total)}${report.paid !== undefined ? ` • Paid: ${formatCurrency(report.paid)} • Due: ${formatCurrency(report.due || 0)}` : ""}` : `${report?.data.length || 0} records`}
-          action={<div className="flex gap-2 no-print"><Button variant="secondary" onClick={exportCsv}><Download size={16} /> Export</Button><Button onClick={() => window.print()}><Printer size={16} /> Print</Button></div>}
-        />
-        {loading || !report ? <div className="grid min-h-64 place-items-center"><Spinner /></div> : (
-          <Table>
-            <thead><tr>{headers.map((h) => <Th key={h}>{h}</Th>)}</tr></thead>
-            <tbody className="divide-y divide-slate-100">{renderRows()}</tbody>
-          </Table>
-        )}
-      </Card>
+      {/* GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <div className="p-4 rounded-xl shadow bg-white">
+          <h2 className="text-gray-500">Products</h2>
+          <p className="text-2xl font-bold">{data?.products || 0}</p>
+        </div>
+
+        <div className="p-4 rounded-xl shadow bg-white">
+          <h2 className="text-gray-500">Customers</h2>
+          <p className="text-2xl font-bold">{data?.customers || 0}</p>
+        </div>
+
+        <div className="p-4 rounded-xl shadow bg-white">
+          <h2 className="text-gray-500">Suppliers</h2>
+          <p className="text-2xl font-bold">{data?.suppliers || 0}</p>
+        </div>
+
+        <div className="p-4 rounded-xl shadow bg-white">
+          <h2 className="text-gray-500">Purchases</h2>
+          <p className="text-2xl font-bold">{data?.purchases || 0}</p>
+        </div>
+
+        <div className="p-4 rounded-xl shadow bg-white">
+          <h2 className="text-gray-500">Sales</h2>
+          <p className="text-2xl font-bold">{data?.sales || 0}</p>
+        </div>
+
+        <div className="p-4 rounded-xl shadow bg-green-50 border">
+          <h2 className="text-gray-600">Revenue</h2>
+          <p className="text-2xl font-bold text-green-600">
+            ${data?.revenue || 0}
+          </p>
+        </div>
+
+      </div>
     </div>
   );
 }
