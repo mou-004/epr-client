@@ -6,7 +6,7 @@ export default function Reports() {
 
   useEffect(() => {
     axios.get("http://localhost:5000/api/stats")
-      .then((res: any) => {
+      .then((res) => {
         setData(res.data);
       });
   }, []);
@@ -18,6 +18,7 @@ export default function Reports() {
       <p>Products: {data?.products || 0}</p>
       <p>Customers: {data?.customers || 0}</p>
       <p>Suppliers: {data?.suppliers || 0}</p>
+      <p>Purchases: {data?.purchases || 0}</p>
       <p>Sales: {data?.sales || 0}</p>
       <p>Revenue: {data?.revenue || 0}</p>
     </div>
